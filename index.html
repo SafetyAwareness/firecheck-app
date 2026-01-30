@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>FireCheck Pro</title>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+    <style>
+        :root { --primary: #D93025; --success: #1E8E3E; --bg: #F8F9FA; --text: #202124; }
+        * { box-sizing: border-box; font-family: 'Prompt', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--bg); color: var(--text); margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+        
+        /* Header */
+        header { background: white; padding: 10px 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); display: flex; justify-content: space-between; align-items: center; z-index: 10; }
+        .logo { font-weight: 600; color: var(--primary); font-size: 1.1rem; display: flex; align-items: center; gap: 5px; }
+        .month-picker { padding: 5px; border: 1px solid #ddd; border-radius: 6px; font-family: 'Prompt'; }
+
+        /* Dashboard */
+        .dashboard { background: white; padding: 10px 15px; border-bottom: 1px solid #eee; }
+        .progress-bar { height: 6px; background: #eee; border-radius: 3px; overflow: hidden; margin-bottom: 5px; }
+        .progress-fill { height: 100%; background: var(--success); width: 0%; transition: width 0.3s; }
+        .stats { font-size: 0.8rem; color: #666; display: flex; justify-content: space-between; }
+
+        /* Filter */
+        .filter-bar { padding: 10px 15px; background: white; border-bottom: 1px solid #eee; display: flex; gap: 10px; overflow-x: auto; }
+        .filter-btn { border: 1px solid #ddd; background: white; padding: 5px 12px; border-radius: 15px; font-size: 0.8rem; white-space: nowrap; }
+        .filter-btn.active { background: var(--primary); color: white; border-color: var(--primary); }
+        .search-input { flex: 1; padding: 5px 10px; border: 1px solid #ddd; border-radius: 15px; font-family: 'Prompt'; outline: none; }
+
+        /* List */
+        #list { flex: 1; overflow-y: auto; padding: 15px; padding-bottom: 80px; }
+        .card { background: white; padding: 15px; border-radius: 12px; margin-bottom: 10px; box-shadow: 0 1px 2px rgba(0,0,0,0.05); border-left: 4px solid #ddd; cursor: pointer; }
+        .card.done { border-left-color: var(--success); }
+        .card.wait { border-left-color: var(--primary); }
+        .card h3 { margin: 0 0 5px 0; font-size: 1rem; }
+        .card p { margin: 0; font-size: 0.8rem; color: #666; }
+
+        /* FAB */
+        .fab-container { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 10px; z-index: 20; }
+        .fab { width: 50px; height: 50px; border-radius: 50%; display: flex; justify-content: center; align-items: center; color: white; box-shadow: 0 4px 10px rgba(0,0,0,0.2); cursor: pointer; }
+        .fab-scan { background: var(--text); width: 60px; height: 60px; font-size: 24px; }
+        .fab-excel { background: #217346; }
+
+        /* Modal */
+        .modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); display: none; align-items: flex-end; z-index: 100; }
+        .modal.show { display: flex; }
+        .modal-content { background: white; width: 100%; border-radius: 20px 20px 0 0; padding: 20px; max-height: 90vh; overflow-y: auto; }
+        
+        /* Form */
+        .check-row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
+        .toggle { position: relative; width: 40px; height: 20px; }
+        .toggle input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: #ccc; border-radius: 20px; transition: .3s; }
+        .slider:before { content: ""; position: absolute; height: 16px; width: 16px; left: 2px; bottom: 2px; background: white; border-radius: 50%; transition: .3s; }
+        input:checked + .slider { background: var(--success); }
+        input:checked + .slider:before { transform: translateX(20px); }
+        
+        .input-box { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; margin-top: 10px; font-family: 'Prompt'; }
+        .btn-save { width: 100%; padding: 12px; background: var(--primary); color: white; border: none; border-radius: 8px; margin-top: 15px; font-size: 1rem; }
+        .btn-close { width: 100%; padding: 10px; background: white; border: 1px solid #ddd; border-radius: 8px; margin-top: 10px; }
+
+        #qr-reader { width: 100%; border-radius: 10px; overflow: hidden; background: black; }
+        .reset-btn { position: fixed; bottom: 10px; left: 10px; font-size: 10px; color: #999; background: none; border: none; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">🔥 FireCheck Pro</div>
+        <input type="month" id="monthPicker" class="month-picker" onchange="render()">
+    </header>
+
+    <div class="dashboard">
+        <div class="progress-bar"><div id="progressFill" class="progress-fill"></div></div>
+        <div class="stats"><span id="statsText">0/90</span><span id="percentText">0%</span></div>
+    </div>
+
+    <div class="filter-bar">
+        <input type="text" id="search" class="search-input" placeholder="ค้นหา..." onkeyup="render()">
+        <button class="filter-btn active" onclick="setFilter('all')" id="btn-all">ทั้งหมด</button>
+        <button class="filter-btn" onclick="setFilter('wait')" id="btn-wait">รอตรวจ</button>
+    </div>
+
+    <div id="list"></div>
+
+    <div class="fab-container">
+        <div class="fab fab-excel" onclick="exportExcel()">📥</div>
+        <div class="fab fab-scan" onclick="openScan()">📷</div>
+    </div>
+
+    <!-- Inspector Modal -->
+    <div id="modalInspect" class="modal">
+        <div class="modal-content">
+            <h2 style="margin-top:0; color:var(--primary);">📋 ตรวจสอบ</h2>
+            <p id="inspectTitle" style="color:#666;">FE-XX</p>
+            <div id="checks">
+                <!-- Checkboxes will be generated here -->
+            </div>
+            <textarea id="note" class="input-box" placeholder="หมายเหตุ (ถ้ามี)"></textarea>
+            <input type="text" id="inspector" class="input-box" placeholder="ชื่อผู้ตรวจ" required>
+            <button class="btn-save" onclick="saveData()">บันทึกผล</button>
+            <button class="btn-close" onclick="closeModal('modalInspect')">ปิด</button>
+        </div>
+    </div>
+
+    <!-- Scanner Modal -->
+    <div id="modalScan" class="modal">
+        <div class="modal-content">
+            <h2>📷 สแกน QR Code</h2>
+            <div id="qr-reader"></div>
+            <p style="text-align:center; margin-top:10px;">หรือกรอกรหัส</p>
+            <div style="display:flex; gap:5px;">
+                <input type="text" id="manualId" class="input-box" style="margin:0;" placeholder="FE-01">
+                <button class="btn-save" style="margin:0; width:auto;" onclick="manualScan()">Go</button>
+            </div>
+            <button class="btn-close" onclick="stopScan()">ปิดกล้อง</button>
+        </div>
+    </div>
+
+    <button class="reset-btn" onclick="clearAll()">Reset</button>
+
+    <script>
+        // DATA 90 Points
+        const DB = [
+            {id:"FE-01",loc:"Work Shop",type:"เคมีแห้ง"},{id:"FE-02",loc:"Work Shop",type:"เคมีแห้ง"},
+            {id:"FE-03",loc:"Office 1 Fl.",type:"เคมีแห้ง"},{id:"FE-04",loc:"Office 2 Fl.",type:"CO2"},
+            {id:"FE-05",loc:"Office 2 Fl.",type:"เคมีแห้ง"},{id:"FE-06",loc:"Office 2 Fl.",type:"CO2"},
+            {id:"FE-07",loc:"Canteen",type:"เคมีแห้ง"},{id:"FE-08",loc:"Work Shop",type:"เคมีแห้ง"},
+            {id:"FE-09",loc:"Office 2 Fl.",type:"CO2"},{id:"FE-10",loc:"Fire Pump Rm.",type:"เคมีแห้ง"},
+            {id:"FE-11",loc:"Utility Plant",type:"เคมีแห้ง"},{id:"FE-12",loc:"Ware House",type:"เคมีแห้ง"},
+            {id:"FE-13",loc:"Ware House",type:"เคมีแห้ง"},{id:"FE-14",loc:"Locker Room",type:"CO2"},
+            {id:"FE-15",loc:"Utility Plant",type:"เคมีแห้ง"},{id:"FE-16",loc:"Utility Plant",type:"เคมีแห้ง"},
+            {id:"FE-17",loc:"AHU. Room",type:"CO2"},{id:"FE-18",loc:"AHU. Room",type:"เคมีแห้ง"},
+            {id:"FE-19",loc:"AHU. Room",type:"เคมีแห้ง"},{id:"FE-20",loc:"AHU. Room",type:"เคมีแห้ง"},
+            {id:"FE-21",loc:"AHU. Room",type:"เคมีแห้ง"},{id:"FE-22",loc:"AHU. Room",type:"เคมีแห้ง"},
+            {id:"FE-23",loc:"Office 1 Fl.",type:"เคมีแห้ง"},{id:"FE-24",loc:"Office 1 Fl.",type:"เคมีแห้ง"},
+            {id:"FE-25",loc:"Office 2 Fl.",type:"เคมีแห้ง"},{id:"FE-26",loc:"Office 2 Fl.",type:"เคมีแห้ง"},
+            {id:"FE-27",loc:"Production",type:"เคมีแห้ง"},{id:"FE-28",loc:"Production",type:"Halotron"},
+            {id:"FE-29",loc:"Ware House",type:"เคมีแห้ง"},{id:"FE-30",loc:"Production",type:"เคมีแห้ง"},
+            {id:"FE-31",loc:"Production",type:"Halotron"},{id:"FE-32",loc:"Ware House",type:"เคมีแห้ง"},
+            {id:"FE-33",loc:"Production",type:"Halotron"},{id:"FE-34",loc:"Production",type:"Halotron"},
+            {id:"FE-35",loc:"Canteen",type:"Halotron"},{id:"FE-36",loc:"Production",type:"Halotron"},
+            {id:"FE-37",loc:"Locker Room",type:"CO2"},{id:"FE-38",loc:"Canteen",type:"CO2"},
+            {id:"FE-39",loc:"Locker Room",type:"CO2"},{id:"FE-40",loc:"Locker Room",type:"Halotron"},
+            {id:"FE-41",loc:"Ware House",type:"Halotron"},{id:"FE-42",loc:"Guard House",type:"Halotron"},
+            {id:"FE-43",loc:"Lobby",type:"Halotron"},{id:"FE-44",loc:"Production",type:"เคมีแห้ง"},
+            {id:"FE-45",loc:"Ware House",type:"เคมีแห้ง"},{id:"FE-46",loc:"Utility Plant",type:"เคมีแห้ง"},
+            {id:"FE-47",loc:"Ware House",type:"Halotron"},{id:"FE-48",loc:"Utility Plant",type:"เคมีแห้ง"},
+            {id:"FE-49",loc:"Fire Pump Rm.",type:"เคมีแห้ง"},{id:"FE-50",loc:"Production",type:"CO2"},
+            {id:"FE-51",loc:"Toliet",type:"เคมีแห้ง"},{id:"FE-52",loc:"Ware House",type:"Halotron"},
+            {id:"FE-53",loc:"Ware House",type:"เคมีแห้ง"},{id:"FE-54",loc:"Ware House",type:"เคมีแห้ง"},
+            {id:"FE-55",loc:"Ware House",type:"เคมีแห้ง"},{id:"FE-56",loc:"Production",type:"Halotron"},
+            {id:"FE-57",loc:"Ware House",type:"Halotron"},{id:"FE-58",loc:"Nurse Room",type:"เคมีแห้ง"},
+            {id:"FE-59",loc:"Ware House",type:"Halotron"},{id:"FE-60",loc:"Ware House",type:"Halotron"},
+            {id:"FE-61",loc:"Ware House",type:"Halotron"},{id:"FE-62",loc:"Ware House",type:"Halotron"},
+            {id:"FE-63",loc:"Ware House",type:"BF2000"},{id:"FE-64",loc:"Ware House",type:"เคมีแห้ง"},
+            {id:"FE-65",loc:"Ware House",type:"เคมีแห้ง"},{id:"FE-66",loc:"Office 2 Fl.",type:"Halotron"},
+            {id:"FE-67",loc:"Locker Room",type:"เคมีแห้ง"},{id:"FE-68",loc:"M&E Room",type:"Halotron"},
+            {id:"FE-69",loc:"M&E Room",type:"Halotron"},{id:"FE-70",loc:"Utility Plant",type:"เคมีแห้ง"},
+            {id:"FE-71",loc:"Utility Plant",type:"BF2000"},{id:"FE-72",loc:"Utility Plant",type:"BF2000"},
+            {id:"FE-73",loc:"Ware House",type:"BF2000"},{id:"FE-74",loc:"Production",type:"BF2000"},
+            {id:"FE-75",loc:"Production",type:"BF2000"},{id:"FE-76",loc:"Production",type:"BF2000"},
+            {id:"FE-77",loc:"Production",type:"Halotron"},{id:"FE-78",loc:"Production",type:"BF2000"},
+            {id:"FE-79",loc:"Fitness Room",type:"Halotron"},{id:"FE-80",loc:"Forklift W/H",type:"เคมีแห้ง"},
+            {id:"FE-81",loc:"Forklift W/H",type:"เคมีแห้ง"},{id:"FE-82",loc:"Forklift W/H",type:"เคมีแห้ง"},
+            {id:"FE-83",loc:"Production",type:"Halotron"},{id:"FE-84",loc:"Production",type:"Halotron"},
+            {id:"FE-85",loc:"Production",type:"Halotron"},{id:"FE-86",loc:"Production",type:"Halotron"},
+            {id:"FE-87",loc:"Production",type:"Halotron"},{id:"FE-88",loc:"Production",type:"เคมีแห้ง"},
+            {id:"FE-89",loc:"Ware House",type:"Halotron"},{id:"FE-90",loc:"AHU. Room",type:"BF2000"}
+        ];
+
+        let pins = JSON.parse(localStorage.getItem('firePins')) || [];
+        let curId = null;
+        let scanner = null;
+        let filter = 'all';
+
+        // Init
+        if(pins.length===0) pins = DB.map(d=>({...d, history:{}}));
+        document.getElementById('monthPicker').value = new Date().toISOString().slice(0,7);
+        render();
+
+        // Deep Link Check (เมื่อเปิดเว็บด้วยลิงก์ QR)
+        window.onload = function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const pid = urlParams.get('id');
+            if(pid) {
+                const p = pins.find(x=>x.id===pid);
+                if(p) setTimeout(()=>openInspect(pid), 500);
+            }
+        };
+
+        function render() {
+            const m = document.getElementById('monthPicker').value;
+            const s = document.getElementById('search').value.toLowerCase();
+            const list = document.getElementById('list');
+            list.innerHTML = '';
+            
+            let total=0, done=0;
+            pins.forEach(p => {
+                total++;
+                if(p.history[m]?.status==='ok') done++;
+                
+                const isDone = p.history[m]?.status==='ok';
+                if(filter==='wait' && isDone) return;
+                if((p.id+p.loc+p.type).toLowerCase().includes(s)) {
+                    const div = document.createElement('div');
+                    div.className = `card ${isDone?'done':'wait'}`;
+                    div.innerHTML = `<h3>${p.id} - ${p.loc}</h3><p>${p.type} • ${isDone?'✅ ตรวจแล้ว':'⚠️ รอตรวจ'}</p>`;
+                    div.onclick = ()=>openInspect(p.id);
+                    list.appendChild(div);
+                }
+            });
+
+            document.getElementById('progressFill').style.width = (total? (done/total)*100 : 0) + '%';
+            document.getElementById('statsText').innerText = `${done} / ${total}`;
+            document.getElementById('percentText').innerText = Math.round(total? (done/total)*100 : 0) + '%';
+        }
+
+        function setFilter(f) {
+            filter = f;
+            document.querySelectorAll('.filter-btn').forEach(b=>b.classList.remove('active'));
+            document.getElementById('btn-'+(f==='all'?'all':'wait')).classList.add('active');
+            render();
+        }
+
+        function openInspect(id) {
+            curId = id;
+            const m = document.getElementById('monthPicker').value;
+            const p = pins.find(x=>x.id===id);
+            const h = p.history[m];
+            
+            document.getElementById('inspectTitle').innerText = `${p.id} : ${p.loc} (${p.type})`;
+            document.getElementById('inspector').value = h?.inspector || '';
+            document.getElementById('note').value = h?.note || '';
+            
+            const checksDiv = document.getElementById('checks');
+            checksDiv.innerHTML = '';
+            const labels = ["น้ำหนักปกติ","สายฉีดสมบูรณ์","ตัวถังปกติ","สลักนิรภัยครบ","สภาพโดยรวม"];
+            labels.forEach((lbl,i) => {
+                const checked = h ? h.checks[i] : true;
+                checksDiv.innerHTML += `
+                <div class="check-row"><span>${i+1}. ${lbl}</span>
+                <label class="toggle"><input type="checkbox" id="c${i}" ${checked?'checked':''}><span class="slider"></span></label></div>`;
+            });
+            
+            document.getElementById('modalInspect').classList.add('show');
+        }
+
+        function saveData() {
+            const name = document.getElementById('inspector').value;
+            if(!name) return alert('ระบุชื่อผู้ตรวจ');
+            const m = document.getElementById('monthPicker').value;
+            const checks = [];
+            for(let i=0;i<5;i++) checks.push(document.getElementById(`c${i}`).checked);
+            
+            const p = pins.find(x=>x.id===curId);
+            p.history[m] = {
+                status: 'ok',
+                inspector: name,
+                note: document.getElementById('note').value,
+                time: new Date().toLocaleString('th-TH'),
+                checks: checks
+            };
+            localStorage.setItem('firePins', JSON.stringify(pins));
+            closeModal('modalInspect');
+            render();
+        }
+
+        function openScan() {
+            document.getElementById('modalScan').classList.add('show');
+            scanner = new Html5QrcodeScanner("qr-reader", { fps: 10, qrbox: 250 });
+            scanner.render((txt)=>{
+                // รองรับทั้ง QR ธรรมดา (FE-01) และ QR แบบลิงก์ (https://...?id=FE-01)
+                let scannedId = txt;
+                try {
+                    const url = new URL(txt);
+                    const params = new URLSearchParams(url.search);
+                    if (params.get('id')) scannedId = params.get('id');
+                } catch (e) {}
+
+                const p = pins.find(x=>x.id===scannedId);
+                if(p) { stopScan(); openInspect(scannedId); }
+                else alert('ไม่พบรหัส: '+txt);
+            });
+        }
+        function stopScan() { if(scanner) scanner.clear(); closeModal('modalScan'); }
+        function manualScan() {
+            const id = document.getElementById('manualId').value.toUpperCase();
+            const p = pins.find(x=>x.id===id);
+            if(p) { closeModal('modalScan'); openInspect(id); } else alert('ไม่พบรหัส');
+        }
+
+        function exportExcel() {
+            const m = document.getElementById('monthPicker').value;
+            let csv = `\uFEFFID,Location,Type,Status,Inspector,Time,Note,Issues\n`;
+            pins.forEach(p => {
+                const h = p.history[m];
+                let st='Wait', insp='-', t='-', n='-', issue='-';
+                if(h) {
+                    st='Done'; insp=h.inspector; t=h.time; n=h.note||'-';
+                    const fails = [];
+                    ["Weight","Hose","Tank","Pin","Overall"].forEach((k,i)=>{ if(!h.checks[i]) fails.push(k); });
+                    if(fails.length>0) issue = fails.join(", "); else issue = "OK";
+                }
+                csv += `${p.id},"${p.loc}","${p.type}",${st},"${insp}","${t}","${n}","${issue}"\n`;
+            });
+            const blob = new Blob([csv], {type:'text/csv;charset=utf-8'});
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = `FireCheck_${m}.csv`;
+            link.click();
+        }
+
+        function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+        function clearAll() { if(confirm('ลบข้อมูลทั้งหมด?')) { localStorage.removeItem('firePins'); location.reload(); } }
+    </script>
+</body>
+</html>
